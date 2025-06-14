@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCR para PDF/Imágenes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Sube hasta 8 archivos para OCR</h1>
+    <form id="uploadForm">
+      <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" max="8">
+      <button type="submit">Procesar con OCR</button>
+    </form>
+    <div id="results"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <!-- Agrega esto en el <head> de tu index.html -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
