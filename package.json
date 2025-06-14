@@ -12,6 +12,7 @@
   "dependencies": {
     "express": "^5.1.0",
     "multer": "^2.0.1",
+    "pdf-ocr-node": "file:",
     "pdf-parse": "^1.1.1",
     "tesseract.js": "^6.0.1"
   }

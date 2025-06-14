@@ -3,20 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OCR para PDF/Imágenes</title>
+  <title>Extracción de Texto de PDF/Imágenes</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h1>Sube hasta 8 archivos para OCR</h1>
-    <form id="uploadForm">
-      <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" max="8">
-      <button type="submit">Procesar con OCR</button>
-    </form>
-    <div id="results"></div>
+    <h1>📄 OCR Space Preserver</h1>
+    <p class="subtitle">Extrae texto de PDFs/imágenes conservando espacios y formato</p>
+    
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-content">
+        <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" width="80" alt="Subir archivos">
+        <p>Arrastra aquí tus archivos (PDF, PNG, JPG) o haz clic para seleccionar</p>
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple>
+        <div class="limits">Máximo 8 archivos • 10MB cada uno</div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h2>🛠️ Cómo usar:</h2>
+      <ol>
+        <li>Arrastra archivos PDF o imágenes a la zona superior.</li>
+        <li>O haz clic para seleccionar manualmente (hasta 8 archivos).</li>
+        <li>Espera a que se procesen (el OCR puede tardar unos segundos).</li>
+        <li>Descarga los archivos TXT con el texto extraído.</li>
+      </ol>
+      <div class="tip">
+        💡 <strong>Tip:</strong> Para PDFs escaneados, el texto conservará los espacios originales.
+      </div>
+    </div>
+
+    <div id="results" class="results"></div>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-  <!-- Agrega esto en el <head> de tu index.html -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <script src="script.js"></script>
 </body>

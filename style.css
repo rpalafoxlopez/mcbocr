@@ -1,0 +1,128 @@
+:root {
+  --bg-color: #121212;
+  --card-bg: #1e1e1e;
+  --text-color: #e0e0e0;
+  --accent-color: #bb86fc;
+  --drop-zone-border: #3a3a3a;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 20px;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: var(--accent-color);
+  text-align: center;
+  margin-bottom: 0;
+}
+
+.subtitle {
+  text-align: center;
+  color: #aaa;
+  margin-top: 5px;
+}
+
+.drop-zone {
+  border: 2px dashed var(--drop-zone-border);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  margin: 30px 0;
+  transition: all 0.3s;
+  background-color: var(--card-bg);
+}
+
+.drop-zone.active {
+  border-color: var(--accent-color);
+  background-color: #2a2a2a;
+}
+
+.drop-content {
+  pointer-events: none;
+}
+
+.drop-zone.active .drop-content {
+  opacity: 0.7;
+}
+
+#fileInput {
+  display: none;
+}
+
+.limits {
+  font-size: 12px;
+  color: #777;
+  margin-top: 10px;
+}
+
+.instructions {
+  background-color: var(--card-bg);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.instructions ol {
+  padding-left: 20px;
+}
+
+.tip {
+  background-color: #333;
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.results {
+  margin-top: 20px;
+}
+
+.result-item {
+  background-color: var(--card-bg);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.result-item h3 {
+  margin-top: 0;
+  color: var(--accent-color);
+}
+
+.download-btn {
+  background-color: var(--accent-color);
+  color: #000;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 10px;
+  display: inline-block;
+}
+
+.progress-bar {
+  width: 100%;
+  background-color: #333;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+.progress {
+  height: 5px;
+  background-color: var(--accent-color);
+  border-radius: 5px;
+  width: 0%;
+  transition: width 0.3s;
+}
