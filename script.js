@@ -127,13 +127,30 @@ async function processImage(file) {
 
 // ===== [5] Backend (Netlify Functions) =====
 async function processWithBackend(file) {
-  const base64 = await toBase64(file);
-  const response = await fetch('/.netlify/functions/process-ocr', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files: [{ name: file.name, base64 }] })
-  });
-  return (await response.json())[0];
+  try {
+    const base64 = await toBase64(file);
+    const response = await fetch('/.netlify/functions/process-ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [{ name: file.name, base64 }] })
+    });
+
+    if (!response.ok) throw new Error("Error en la petición al backend");
+    
+    const data = await response.json();
+    if (!data || !data.length || !data[0].text) {
+      throw new Error("Formato de respuesta inválido");
+    }
+
+    return data[0];
+
+  } catch (error) {
+    return { 
+      name: file.name,
+      text: `Error procesando ${file.name}: ${error.message}`,
+      file: "" 
+    };
+  }
 }
 
 // ===== [6] Utilidades =====
