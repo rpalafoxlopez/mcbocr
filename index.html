@@ -8,22 +8,13 @@
 </head>
 <body>
   <div class="container">
-    <h1>📄 OCR Space Preserver</h1>
+    <h1>📄 MCBrokers OCR</h1>
     <p class="subtitle">Extrae texto de PDFs/imágenes conservando espacios y formato</p>
     
-    <div id="dropZone" class="drop-zone">
-      <div class="drop-content">
-        <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" width="80" alt="Subir archivos">
-        <p>Arrastra aquí tus archivos (PDF, PNG, JPG) o haz clic para seleccionar</p>
-        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple>
-        <div class="limits">Máximo 8 archivos • 10MB cada uno</div>
-      </div>
-    </div>
-
     <div class="instructions">
       <h2>🛠️ Cómo usar:</h2>
       <ol>
-        <li>Arrastra archivos PDF o imágenes a la zona superior.</li>
+        <li>Arrastra archivos PDF o imágenes.</li>
         <li>O haz clic para seleccionar manualmente (hasta 8 archivos).</li>
         <li>Espera a que se procesen (el OCR puede tardar unos segundos).</li>
         <li>Descarga los archivos TXT con el texto extraído.</li>
@@ -32,7 +23,18 @@
         💡 <strong>Tip:</strong> Para PDFs escaneados, el texto conservará los espacios originales.
       </div>
     </div>
+
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-content">
+        <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" width="80" alt="Subir archivos">
+        <p>Arrastra aquí tus archivos (PDF, PNG, JPG) o haz clic para seleccionar</p>
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple>
+        <div class="limits">Máximo 8 archivos • 10MB cada uno</div>
+      </div>
+    </div>
+   
     <button type="submit">Procesar con OCR</button>
+
     <div id="results" class="results"></div>
   </div>
 
