@@ -56,20 +56,35 @@ function handleFiles(files) {
 }
 
 // ===== [3] Procesamiento de Archivos =====
+// Versión mejorada de processFile con manejo robusto de errores
 async function processFile(file) {
   const resultItem = createResultItem(file.name);
   resultsDiv.appendChild(resultItem);
 
   try {
-    let text = '';
-    if (file.type === 'application/pdf') {
-      text = await processPDF(file);
-    } else {
-      text = await processImageWithOCR(file);
+    // 1. Validar tipo de archivo primero
+    if (!isValidFileType(file)) {
+      throw new Error('Tipo de archivo no soportado');
     }
+
+    // 2. Verificar si el PDF está corrupto
+    if (file.type === 'application/pdf') {
+      await validatePDF(file);
+    }
+
+    // 3. Procesamiento real
+    const text = file.type === 'application/pdf' 
+      ? await processPDF(file) 
+      : await processImageWithOCR(file);
+
     showResult(resultItem, file.name, text);
+
   } catch (error) {
-    showError(resultItem, file.name, error);
+    console.error(`Error procesando ${file.name}:`, error);
+    showError(resultItem, file.name, {
+      message: `Error al procesar archivo: ${error.message}`,
+      details: 'El archivo puede estar corrupto o en formato no soportado'
+    });
   }
 }
 
@@ -135,7 +150,64 @@ async function processImageWithOCR(file) {
     throw new Error("Falló el reconocimiento de texto");
   }
 }
+// Funciones auxiliares
+function isValidFileType(file) {
+  const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+  return validTypes.includes(file.type);
+}
 
+async function validatePDF(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const arr = new Uint8Array(reader.result);
+      // Verificar cabecera del PDF
+      if (arr.length > 4 && 
+          arr[0] === 0x25 && // %
+          arr[1] === 0x50 && // P
+          arr[2] === 0x44 && // D
+          arr[3] === 0x46) { // F
+        resolve();
+      } else {
+        reject(new Error('El archivo no es un PDF válido'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Error al leer el archivo'));
+    reader.readAsArrayBuffer(file.slice(0, 4)); // Solo leer los primeros bytes
+  });
+}
+
+// Versión segura de processPDF
+async function processPDF(file) {
+  try {
+    // Opción 1: Intentar con el backend primero
+    try {
+      const result = await processWithBackend(file);
+      return result.text;
+    } catch (backendError) {
+      console.warn('Falló backend, intentando con PDF.js:', backendError);
+    }
+
+    // Opción 2: Fallback a PDF.js
+    const pdf = await pdfjsLib.getDocument({
+      url: URL.createObjectURL(file),
+      disableStream: true,
+      disableAutoFetch: true
+    }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      fullText += content.items.map(item => item.str).join(' ') + '\n\n';
+    }
+
+    return fullText || '(No se pudo extraer texto del PDF)';
+
+  } catch (error) {
+    throw new Error(`Error procesando PDF: ${error.message}`);
+  }
+}
 // ===== [5] Backend (Netlify Functions) =====
 async function processWithBackend(file) {
   try {
