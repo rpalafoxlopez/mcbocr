@@ -59,9 +59,9 @@ function handleFiles(files) {
   const totalFiles = files.length;
 
   Array.from(files).forEach(async (file) => {
-    if (file.size > 20 * 1024 * 1024) {
+    if (file.size > 100 * 1024 * 1024) {
       showError(null, file.name, {
-        message: `El archivo supera el límite de 20MB`,
+        message: `El archivo supera el límite de 100MB`,
         details: ''
       });
       updateProgress(++processedCount, totalFiles);
