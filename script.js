@@ -65,6 +65,10 @@ async function processFile(file) {
       ? await processPDF(file) 
       : await processImage(file);
 
+      console.log("Tamaño del archivo:", file.size);
+      console.log("Tipo MIME:", file.type);
+      console.log("Primeros 100 caracteres base64:", base64.substring(0, 100));
+
     showResult(resultItem, file.name, text);
   } catch (error) {
     showError(resultItem, file.name, error);
