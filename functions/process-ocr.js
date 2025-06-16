@@ -2,98 +2,174 @@ const { createWorker } = require('tesseract.js');
 const pdfParse = require('pdf-parse');
 const { Readable } = require('stream');
 
-// Función para extracción simple de texto
-const getSimpleText = (buffer) => {
-  return new Promise((resolve) => {
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null);
-    
-    let text = '';
-    stream.on('data', chunk => {
-      text += chunk.toString('ascii', 0, 1024);
-    });
-    stream.on('end', () => resolve(text));
+// Tiempo máximo de ejecución (5 minutos)
+const MAX_EXECUTION_TIME = 300000;
+
+// Cache de workers para mejor performance
+const workerCache = {
+  worker: null,
+  lastUsed: 0
+};
+
+async function getWorker() {
+  // Reutilizar worker si está disponible
+  if (workerCache.worker && (Date.now() - workerCache.lastUsed < 30000)) {
+    workerCache.lastUsed = Date.now();
+    return workerCache.worker;
+  }
+
+  // Limpiar worker existente si hay uno
+  if (workerCache.worker) {
+    await workerCache.worker.terminate();
+  }
+
+  // Crear nuevo worker
+  const worker = await createWorker({
+    logger: m => console.log(m),
+    errorHandler: err => console.error(err),
+    cachePath: '/tmp/tesseract'
   });
-};
 
-// Renderizador personalizado
-const renderPage = (pageData) => {
-  const renderOptions = {
-    normalizeWhitespace: false,
-    disableCombineTextItems: false,
-    customFontExtractor: (text) => text.replace(/[^\x00-\x7F]/g, '')
-  };
-  return pageData.getTextContent(renderOptions)
-    .then(textContent => textContent.items.map(item => item.str).join(' '));
-};
+  await worker.loadLanguage('spa+eng');
+  await worker.initialize('spa+eng');
+  await worker.setParameters({
+    preserve_interword_spaces: '1',
+    tessedit_pageseg_mode: '6',
+    tessedit_ocr_engine_mode: '1'
+  });
 
-exports.handler = async (event) => {
+  workerCache.worker = worker;
+  workerCache.lastUsed = Date.now();
+  return worker;
+}
+
+async function extractTextFromPDF(buffer) {
+  // Timeout para evitar procesamiento infinito
+  const timeout = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Tiempo de procesamiento excedido')), 
+    MAX_EXECUTION_TIME
+  );
+
   try {
+    // 1. Intento con pdf-parse
+    const pdfData = await Promise.race([
+      pdfParse(buffer, {
+        max: 20, // Limitar a 20 páginas
+        pagerender: async (pageData) => {
+          const textContent = await pageData.getTextContent({
+            normalizeWhitespace: true,
+            disableCombineTextItems: false
+          });
+          return textContent.items.map(item => item.str).join(' ');
+        }
+      }),
+      timeout
+    ]);
+
+    if (pdfData.text && pdfData.text.trim().length > 50) {
+      return pdfData.text;
+    }
+
+    // 2. Fallback a OCR si no hay suficiente texto
+    console.log('Iniciando OCR para PDF...');
+    const worker = await getWorker();
+    const { data } = await Promise.race([
+      worker.recognize(buffer),
+      timeout
+    ]);
+
+    return data.text || '(No se pudo extraer texto del PDF)';
+  } catch (error) {
+    console.error('Error en extractTextFromPDF:', error);
+    throw error;
+  }
+}
+
+exports.handler = async (event, context) => {
+  // Configurar timeout de Netlify
+  context.callbackWaitsForEmptyEventLoop = false;
+
+  // Validar método HTTP
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Método no permitido' })
+    };
+  }
+
+  try {
+    // Validar cuerpo de la solicitud
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Cuerpo de solicitud faltante' })
+      };
+    }
+
     const { files } = JSON.parse(event.body);
-    const results = [];
+    if (!files || !Array.isArray(files)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Formato de archivos inválido' })
+      };
+    }
 
-    for (const file of files) {
+    // Procesar cada archivo
+    const results = await Promise.all(files.map(async (file) => {
       try {
+        // Validar tamaño máximo (8MB)
         const buffer = Buffer.from(file.base64, 'base64');
-        let text = '';
-
-        // 1. Intento extracción simple
-        text = await getSimpleText(buffer);
-        
-        // 2. Si no hay texto, probar con pdf-parse
-        if (!text.trim()) {
-          const pdfData = await pdfParse(buffer, {
-            max: 3,
-            pagerender: renderPage
-          }).catch(() => ({ text: '' }));
-          
-          text = pdfData.text;
+        if (buffer.length > 8 * 1024 * 1024) {
+          throw new Error('Archivo excede el límite de 8MB');
         }
 
-        // 3. Fallback a OCR si aún no hay texto
-        if (!text.trim()) {
-          const worker = await createWorker('spa');
-          await worker.setParameters({
-            preserve_interword_spaces: '1',
-            tessedit_pageseg_mode: '1',
-            tessedit_ocr_engine_mode: '3'
-          });
-          
+        // Extraer texto según tipo de archivo
+        let text = '';
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          text = await extractTextFromPDF(buffer);
+        } else {
+          // Procesar imagen con OCR
+          const worker = await getWorker();
           const { data } = await worker.recognize(buffer);
           text = data.text;
-          await worker.terminate();
         }
 
-        results.push({
+        return {
           name: file.name,
           text: text || 'No se pudo extraer texto',
-          // No incluir file.base64 en la respuesta para reducir tamaño
-          fileSize: buffer.length
-        });
-
+          success: !!text,
+          size: buffer.length
+        };
       } catch (error) {
         console.error(`Error procesando ${file.name}:`, error);
-        results.push({
+        return {
           name: file.name,
           text: `Error: ${error.message}`,
-          fileSize: 0
-        });
+          success: false,
+          size: 0
+        };
       }
-    }
+    }));
 
     return {
       statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(results)
     };
-
   } catch (error) {
+    console.error('Error en handler:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ 
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        error: 'Error interno del servidor',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       })
     };
+  } finally {
+    // Limpiar worker al terminar
+    if (workerCache.worker) {
+      await workerCache.worker.terminate();
+      workerCache.worker = null;
+    }
   }
 };
