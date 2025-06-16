@@ -72,6 +72,8 @@ async function processFile(file) {
       await validatePDF(file);
     }
 
+    console.log( file.type );
+
     // 3. Procesamiento real
     const text = file.type === 'application/pdf' 
       ? await processPDF(file) 
