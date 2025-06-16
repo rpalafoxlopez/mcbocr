@@ -3,41 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Extracción de Texto de PDF/Imágenes</title>
+  <title>MCBrokers OCR - Extracción Avanzada de Texto</title>
+  <meta name="description" content="Herramienta profesional para extraer texto de PDFs e imágenes conservando el formato original">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h1>📄 MCBrokers OCR</h1>
-    <p class="subtitle">Extrae texto de PDFs/imágenes conservando espacios y formato</p>
-    
-    <div class="instructions">
-      <h2>🛠️ Cómo usar:</h2>
-      <ol>
-        <li>Arrastra archivos PDF o imágenes.</li>
-        <li>O haz clic para seleccionar manualmente (hasta 8 archivos).</li>
-        <li>Espera a que se procesen (el OCR puede tardar unos segundos).</li>
-        <li>Descarga los archivos TXT con el texto extraído.</li>
-      </ol>
-      <div class="tip">
-        💡 <strong>Tip:</strong> Para PDFs escaneados, el texto conservará los espacios originales.
+    <header class="header">
+      <div class="logo-container">
+        <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" alt="Logo MCBrokers OCR" class="logo">
+        <div>
+          <h1>MCBrokers OCR</h1>
+          <p class="subtitle">Extracción profesional de texto de documentos</p>
+        </div>
       </div>
-    </div>
+    </header>
 
-    <div id="dropZone" class="drop-zone">
-      <div class="drop-content">
-        <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" width="80" alt="Subir archivos">
-        <p>Arrastra aquí tus archivos (PDF, PNG, JPG) o haz clic para seleccionar</p>
-        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple>
-        <div class="limits">Máximo 8 archivos • 10MB cada uno</div>
+    <main class="main-content">
+      <section class="features-section">
+        <div class="feature-card">
+          <i class="fas fa-file-pdf feature-icon"></i>
+          <h3>PDF con Texto</h3>
+          <p>Extracción directa de texto nativo en PDFs</p>
+        </div>
+        <div class="feature-card">
+          <i class="fas fa-file-image feature-icon"></i>
+          <h3>Imágenes/PDF Escaneados</h3>
+          <p>Reconocimiento óptico de caracteres (OCR)</p>
+        </div>
+        <div class="feature-card">
+          <i class="fas fa-text-width feature-icon"></i>
+          <h3>Formato Conservado</h3>
+          <p>Mantiene espacios y estructura original</p>
+        </div>
+      </section>
+
+      <section class="upload-section">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-content">
+            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+            <h2>Sube tus archivos</h2>
+            <p class="drop-instructions">Arrastra aquí tus documentos o</p>
+            <label for="fileInput" class="file-input-label">
+              <span class="browse-button">Seleccionar archivos</span>
+              <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple>
+            </label>
+            <div class="file-limits">
+              <p><i class="fas fa-info-circle"></i> Límites: Máximo 8 archivos • 10MB cada uno</p>
+              <p>Soportamos: PDF, PNG, JPG</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="global-progress">
+          <div id="globalProgress" class="progress-bar" style="width: 0%">0%</div>
+        </div>
+      </section>
+
+      <section class="how-to-use">
+        <h2><i class="fas fa-question-circle"></i> ¿Cómo funciona?</h2>
+        <div class="steps-container">
+          <div class="step">
+            <div class="step-number">1</div>
+            <p>Sube tus documentos PDF o imágenes</p>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <p>El sistema detecta automáticamente el tipo de archivo</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <p>Procesamos el contenido con tecnología avanzada</p>
+          </div>
+          <div class="step">
+            <div class="step-number">4</div>
+            <p>Descarga el texto extraído en formato TXT</p>
+          </div>
+        </div>
+
+        <div class="tips">
+          <div class="tip-card">
+            <i class="fas fa-lightbulb"></i>
+            <p><strong>Consejo profesional:</strong> Para mejores resultados con documentos escaneados, asegúrate que la imagen esté nítida y bien iluminada.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="results" class="results-section">
+        <h2><i class="fas fa-file-alt"></i> Resultados</h2>
+        <div class="results-container" id="resultsContainer">
+          <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <p>Los archivos procesados aparecerán aquí</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>© 2023 MCBrokers OCR - Herramienta profesional de extracción de texto</p>
+      <div class="footer-links">
+        <a href="#"><i class="fas fa-shield-alt"></i> Privacidad</a>
+        <a href="#"><i class="fas fa-file-alt"></i> Términos</a>
+        <a href="#"><i class="fas fa-envelope"></i> Contacto</a>
       </div>
-    </div>
-   
-    <button type="submit">Procesar con OCR</button>
-
-    <div id="results" class="results"></div>
+    </footer>
   </div>
 
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
   <script src="script.js"></script>
