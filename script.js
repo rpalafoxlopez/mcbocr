@@ -7,9 +7,6 @@ const fileInput = document.getElementById('fileInput');
 const resultsDiv = document.getElementById('results');
 const progressBar = document.getElementById('globalProgress');
 
-const selectedFilesContainer = document.getElementById('selectedFiles'); // Nuevo
-const fileInstructions = document.getElementById('fileInstructions'); // Nuevo
-
 // ===== [1] Configuración de Drag & Drop =====
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   dropZone.addEventListener(eventName, preventDefaults, false);
@@ -27,6 +24,75 @@ dropZone.addEventListener('drop', unhighlight, false);
 
 function highlight() {
   dropZone.classList.add('active');
+}
+
+// ===== [2] Manejo de Archivos - Actualizado =====
+fileInput.addEventListener('change', (e) => {
+  handleFiles(e.target.files);
+  updateSelectedFiles(e.target.files); // Nueva función
+});
+
+function updateSelectedFiles(files) {
+  const container = document.getElementById('selectedFiles');
+  const instructions = document.getElementById('fileInstructions');
+  
+  container.innerHTML = '';
+  
+  if (files.length === 0) {
+    instructions.textContent = 'Arrastra aquí tus documentos o';
+    return;
+  }
+  
+  instructions.textContent = `${files.length} archivo(s) seleccionado(s):`;
+  
+  Array.from(files).forEach((file, index) => {
+    const fileElement = document.createElement('div');
+    fileElement.className = 'selected-file';
+    
+    fileElement.innerHTML = `
+      <i class="fas fa-file-alt"></i>
+      <div class="file-info">
+        <div class="file-name">${file.name}</div>
+        <div class="file-size">${formatFileSize(file.size)}</div>
+      </div>
+      <button class="remove-file" data-index="${index}">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+    
+    container.appendChild(fileElement);
+  });
+  
+  // Agregar event listeners a los botones de eliminar
+  document.querySelectorAll('.remove-file').forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFile(button.dataset.index);
+    });
+  });
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function removeFile(index) {
+  const files = Array.from(fileInput.files);
+  files.splice(index, 1);
+  
+  // Crear una nueva DataTransfer para actualizar los archivos
+  const dataTransfer = new DataTransfer();
+  files.forEach(file => dataTransfer.items.add(file));
+  
+  // Actualizar el input file
+  fileInput.files = dataTransfer.files;
+  
+  // Actualizar la visualización
+  updateSelectedFiles(fileInput.files);
 }
 
 function unhighlight() {
@@ -59,9 +125,9 @@ function handleFiles(files) {
   const totalFiles = files.length;
 
   Array.from(files).forEach(async (file) => {
-    if (file.size > 100 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       showError(null, file.name, {
-        message: `El archivo supera el límite de 100MB`,
+        message: `El archivo supera el límite de 10MB`,
         details: ''
       });
       updateProgress(++processedCount, totalFiles);
@@ -95,84 +161,7 @@ function updateProgress(processed, total) {
     progressBar.classList.add('complete');
   }
 }
-fileInput.addEventListener('change', (e) => {
-fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-  const files = e.target.files;
-  updateSelectedFilesUI(files); // Actualizar interfaz primero
-});
-dropZone.addEventListener('drop', (e) => {
-function handleDrop(e) {
-  const files = e.dataTransfer.files;
-  const files = e.dataTransfer.files;
-  fileInput.files = files; // Asignar archivos al input
-  updateSelectedFilesUI(files); // Actualizar interfaz
-});
-dropZone.addEventListener('click', () => fileInput.click());
-// Función para actualizar la interfaz con archivos seleccionados
-function updateSelectedFilesUI(files) {
-  handleFiles(files);
-  selectedFilesContainer.innerHTML = '';
-  
-  if (!files || files.length === 0) {
-    fileInstructions.textContent = 'Arrastra aquí tus documentos o';
-    return;
-  }
-  
-  fileInstructions.textContent = `${files.length} archivo(s) seleccionado(s):`;
-  
-  Array.from(files).forEach((file, index) => {
-    const fileElement = document.createElement('div');
-    fileElement.className = 'selected-file';
-    fileElement.innerHTML = `
-      <i class="fas ${getFileIcon(file.type)}"></i>
-      <div class="file-info">
-        <div class="file-name">${file.name}</div>
-        <div class="file-size">${formatFileSize(file.size)}</div>
-      </div>
-      <button class="remove-file" data-index="${index}">
-        <i class="fas fa-times"></i>
-      </button>
-    `;
-    selectedFilesContainer.appendChild(fileElement);
-  });
-  
-  // Agregar eventos para eliminar archivos
-  document.querySelectorAll('.remove-file').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeFileAtIndex(btn.dataset.index);
-    });
-  });
-}
-}
-// Función para eliminar un archivo específico
-function removeFileAtIndex(index) {
-  const dt = new DataTransfer();
-  const files = Array.from(fileInput.files);
-  
-  files.forEach((file, i) => {
-    if (i !== parseInt(index)) {
-      dt.items.add(file);
-    }
-  });
-  
-  fileInput.files = dt.files;
-  updateSelectedFilesUI(fileInput.files);
-}
-// Función para obtener icono según tipo de archivo
-function getFileIcon(fileType) {
-  if (fileType === 'application/pdf') return 'fa-file-pdf';
-  if (fileType.includes('image/')) return 'fa-file-image';
-  return 'fa-file-alt';
-}
-// Función para formatear tamaño de archivo
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+
 // ===== [3] Procesamiento de Archivos =====
 async function processFile(file) {
   // Validar tipo de archivo
