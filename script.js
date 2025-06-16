@@ -128,31 +128,54 @@ async function processImage(file) {
 // ===== [5] Backend (Netlify Functions) =====
 async function processWithBackend(file) {
   try {
+    // Validación de tamaño
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error("El archivo excede el límite de 8MB");
+    }
+
     const base64 = await toBase64(file);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     const response = await fetch('/.netlify/functions/process-ocr', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: [{ name: file.name, base64 }] })
+      signal: controller.signal,
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-File-Name': encodeURIComponent(file.name)
+      },
+      body: JSON.stringify({
+        files: [{
+          name: file.name,
+          base64: base64
+        }]
+      })
     });
 
-    if (!response.ok) throw new Error("Error en la petición al backend");
-    
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText}`);
+    }
+
     const data = await response.json();
-    if (!data || !data.length || !data[0].text) {
-      throw new Error("Formato de respuesta inválido");
+    
+    if (!data?.[0]?.text) {
+      throw new Error("Formato de respuesta inesperado");
     }
 
     return data[0];
 
   } catch (error) {
-    return { 
+    console.error(`Error procesando ${file.name}:`, error);
+    return {
       name: file.name,
-      text: `Error procesando ${file.name}: ${error.message}`,
-      file: "" 
+      text: `Error al procesar: ${error.message}`,
+      file: ""
     };
   }
 }
-
 // ===== [6] Utilidades =====
 function toBase64(file) {
   return new Promise((resolve) => {
