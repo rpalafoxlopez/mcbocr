@@ -51,7 +51,7 @@ function handleFiles(files) {
       alert(`El archivo ${file.name} supera el límite de 10MB`);
       return;
     }
-    processFile(file); // Procesar cada archivo
+    processFile(file);
   });
 }
 
@@ -61,21 +61,19 @@ async function processFile(file) {
   resultsDiv.appendChild(resultItem);
 
   try {
-    const text = file.type === 'application/pdf' 
-      ? await processPDF(file) 
-      : await processImage(file);
-
-      console.log("Tamaño del archivo:", file.size);
-      console.log("Tipo MIME:", file.type);
-      console.log("Primeros 100 caracteres base64:", base64.substring(0, 100));
-
+    let text = '';
+    if (file.type === 'application/pdf') {
+      text = await processPDF(file);
+    } else {
+      text = await processImageWithOCR(file);
+    }
     showResult(resultItem, file.name, text);
   } catch (error) {
     showError(resultItem, file.name, error);
   }
 }
 
-// Helper: Crear elemento de resultado
+// Helpers para mostrar resultados
 function createResultItem(filename) {
   const item = document.createElement('div');
   item.className = 'result-item';
@@ -87,7 +85,6 @@ function createResultItem(filename) {
   return item;
 }
 
-// Helper: Mostrar resultado final
 function showResult(item, filename, text) {
   item.innerHTML = `
     <h3>${filename}</h3>
@@ -99,7 +96,6 @@ function showResult(item, filename, text) {
   `;
 }
 
-// Helper: Mostrar error
 function showError(item, filename, error) {
   item.innerHTML = `
     <h3>${filename}</h3>
@@ -109,41 +105,47 @@ function showError(item, filename, error) {
 
 // ===== [4] Funciones de Procesamiento =====
 async function processPDF(file) {
-  // Opción 1: Usar backend (Netlify Function)
-  const result = await processWithBackend(file);
-  return result.text;
-
-  // Opción 2: Procesar en frontend con PDF.js (descomentar)
-  // return await extractTextFromPDF(file);
+  try {
+    // Opción 1: Usar backend (Netlify Function)
+    const result = await processWithBackend(file);
+    return result.text;
+  } catch (error) {
+    console.error("Error al procesar PDF:", error);
+    throw error;
+  }
 }
 
-async function processImage(file) {
-  const worker = await createWorker('spa');
-  await worker.setParameters({
-    preserve_interword_spaces: '1',
-    tessedit_pageseg_mode: '6'
-  });
-  
-  const { data } = await worker.recognize(file);
-  await worker.terminate();
-  return data.text;
+async function processImageWithOCR(file) {
+  try {
+    // Usar Tesseract.js en el frontend
+    const worker = await Tesseract.createWorker();
+    await worker.loadLanguage('spa');
+    await worker.initialize('spa');
+    await worker.setParameters({
+      preserve_interword_spaces: '1',
+      tessedit_pageseg_mode: '6'
+    });
+
+    const { data } = await worker.recognize(file);
+    await worker.terminate();
+    
+    return data.text;
+  } catch (error) {
+    console.error("Error en OCR:", error);
+    throw new Error("Falló el reconocimiento de texto");
+  }
 }
 
 // ===== [5] Backend (Netlify Functions) =====
 async function processWithBackend(file) {
   try {
-    // Validación de tamaño
     if (file.size > 8 * 1024 * 1024) {
       throw new Error("El archivo excede el límite de 8MB");
     }
 
     const base64 = await toBase64(file);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
     const response = await fetch('/.netlify/functions/process-ocr', {
       method: 'POST',
-      signal: controller.signal,
       headers: { 
         'Content-Type': 'application/json',
         'X-File-Name': encodeURIComponent(file.name)
@@ -155,8 +157,6 @@ async function processWithBackend(file) {
         }]
       })
     });
-
-    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -170,16 +170,12 @@ async function processWithBackend(file) {
     }
 
     return data[0];
-
   } catch (error) {
     console.error(`Error procesando ${file.name}:`, error);
-    return {
-      name: file.name,
-      text: `Error al procesar: ${error.message}`,
-      file: ""
-    };
+    throw error;
   }
 }
+
 // ===== [6] Utilidades =====
 function toBase64(file) {
   return new Promise((resolve) => {
@@ -193,7 +189,7 @@ function toBase64(file) {
 resultsDiv.addEventListener('click', (e) => {
   if (e.target.classList.contains('download-btn')) {
     const text = decodeURIComponent(e.target.getAttribute('data-text'));
-    const filename = e.target.getAttribute('data-filename');
+    const filename = e.target.getAttribute('data-filename'));
     downloadTxt(text, filename);
   }
 });
