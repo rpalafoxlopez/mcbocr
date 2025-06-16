@@ -14,6 +14,6 @@
     "multer": "^2.0.1",
     "pdf-ocr-node": "file:",
     "pdf-parse": "^1.1.1",
-    "tesseract.js": "^6.0.1"
+    "tesseract.js": "^4.1.1"
   }
 }
