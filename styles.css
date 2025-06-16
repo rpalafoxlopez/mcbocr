@@ -54,7 +54,7 @@ body {
 
 h1 {
   font-size: 2.5rem;
-  color: var(--light-color);
+  color: var(--dark-color);
   margin-bottom: 5px;
 }
 
