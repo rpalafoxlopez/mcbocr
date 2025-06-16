@@ -1,7 +1,32 @@
-// functions/process-ocr.js
 const { createWorker } = require('tesseract.js');
 const pdfParse = require('pdf-parse');
-const pdf = require('pdf-parse/lib/pdf-parse');
+const { Readable } = require('stream');
+
+// Función para extracción simple de texto
+const getSimpleText = (buffer) => {
+  return new Promise((resolve) => {
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+    
+    let text = '';
+    stream.on('data', chunk => {
+      text += chunk.toString('ascii', 0, 1024);
+    });
+    stream.on('end', () => resolve(text));
+  });
+};
+
+// Renderizador personalizado
+const renderPage = (pageData) => {
+  const renderOptions = {
+    normalizeWhitespace: false,
+    disableCombineTextItems: false,
+    customFontExtractor: (text) => text.replace(/[^\x00-\x7F]/g, '')
+  };
+  return pageData.getTextContent(renderOptions)
+    .then(textContent => textContent.items.map(item => item.str).join(' '));
+};
 
 exports.handler = async (event) => {
   try {
@@ -13,21 +38,26 @@ exports.handler = async (event) => {
         const buffer = Buffer.from(file.base64, 'base64');
         let text = '';
 
-        // 1. Intento con pdf-parse (para PDFs de texto)
-        const pdfData = await pdfParse(buffer, {
-          max: 3, // Limita a 3 páginas
-          pagerender: renderPage, // Renderizador personalizado
-        }).catch(() => ({ text: '' }));
+        // 1. Intento extracción simple
+        text = await getSimpleText(buffer);
+        
+        // 2. Si no hay texto, probar con pdf-parse
+        if (!text.trim()) {
+          const pdfData = await pdfParse(buffer, {
+            max: 3,
+            pagerender: renderPage
+          }).catch(() => ({ text: '' }));
+          
+          text = pdfData.text;
+        }
 
-        text = pdfData.text;
-
-        // 2. Fallback a OCR si no se extrajo texto
+        // 3. Fallback a OCR si aún no hay texto
         if (!text.trim()) {
           const worker = await createWorker('spa');
           await worker.setParameters({
             preserve_interword_spaces: '1',
-            tessedit_pageseg_mode: '1', // Modo automático
-            tessedit_ocr_engine_mode: '3', // LSTM only
+            tessedit_pageseg_mode: '1',
+            tessedit_ocr_engine_mode: '3'
           });
           
           const { data } = await worker.recognize(buffer);
@@ -38,7 +68,8 @@ exports.handler = async (event) => {
         results.push({
           name: file.name,
           text: text || 'No se pudo extraer texto',
-          file: file.base64
+          // No incluir file.base64 en la respuesta para reducir tamaño
+          fileSize: buffer.length
         });
 
       } catch (error) {
@@ -46,7 +77,7 @@ exports.handler = async (event) => {
         results.push({
           name: file.name,
           text: `Error: ${error.message}`,
-          file: ''
+          fileSize: 0
         });
       }
     }
@@ -59,39 +90,10 @@ exports.handler = async (event) => {
   } catch (error) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ 
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      })
     };
   }
 };
-
-// En tu función de Netlify
-const getSimpleText = (buffer) => {
-  return new Promise((resolve) => {
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null);
-    
-    let text = '';
-    stream.on('data', chunk => {
-      text += chunk.toString('ascii', 0, 1024) // Extracción ASCII cruda
-    });
-    stream.on('end', () => resolve(text));
-  });
-};
-
-// Luego usa:
-text = await getSimpleText(buffer) || await extractWithOCR(buffer);
-
-// Renderizador personalizado para manejar fuentes complejas
-async function renderPage(pageData) {
-  const renderOptions = {
-    normalizeWhitespace: false,
-    disableCombineTextItems: false,
-    customFontExtractor: (text) => {
-      return text.replace(/[^\x00-\x7F]/g, ''); // Filtra caracteres no ASCII
-    }
-  };
-  return pageData.getTextContent(renderOptions).then(textContent => {
-    return textContent.items.map(item => item.str).join(' ');
-  });
-}
