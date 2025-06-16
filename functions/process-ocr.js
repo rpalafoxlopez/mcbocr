@@ -31,6 +31,9 @@ exports.handler = async (event, context) => {
             };
           }
 
+          console.log("Tamaño base64 recibido:", file.base64?.length);
+          console.log("Tipo de archivo:", file.name.split('.').pop());
+
           // 2. Fallback a OCR
           const worker = await createWorker('spa');
           await worker.setParameters({
