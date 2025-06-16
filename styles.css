@@ -85,7 +85,7 @@ h1 {
 
 .feature-icon {
   font-size: 2.5rem;
-  color: var(--primary-color);
+  color: var(--accent-color);
   margin-bottom: 15px;
 }
 
