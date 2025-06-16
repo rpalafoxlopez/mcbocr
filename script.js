@@ -5,6 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const resultsDiv = document.getElementById('results');
+const progressBar = document.getElementById('globalProgress');
 
 // ===== [1] Configuración de Drag & Drop =====
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -40,180 +41,140 @@ function handleDrop(e) {
 }
 
 function handleFiles(files) {
+  if (files.length === 0) return;
+  
   if (files.length > 8) {
     alert('Máximo 8 archivos permitidos');
     return;
   }
 
   resultsDiv.innerHTML = '';
-  Array.from(files).forEach(file => {
+  progressBar.style.width = '0%';
+  progressBar.textContent = '0%';
+
+  let processedCount = 0;
+  const totalFiles = files.length;
+
+  Array.from(files).forEach(async (file) => {
     if (file.size > 10 * 1024 * 1024) {
-      alert(`El archivo ${file.name} supera el límite de 10MB`);
+      showError(null, file.name, {
+        message: `El archivo supera el límite de 10MB`,
+        details: ''
+      });
+      updateProgress(++processedCount, totalFiles);
       return;
     }
-    processFile(file);
+
+    try {
+      const resultItem = createResultItem(file.name);
+      resultsDiv.appendChild(resultItem);
+
+      const text = await processFile(file);
+      showResult(resultItem, file.name, text);
+    } catch (error) {
+      console.error(`Error procesando ${file.name}:`, error);
+      showError(null, file.name, {
+        message: `Error al procesar archivo`,
+        details: error.message
+      });
+    } finally {
+      updateProgress(++processedCount, totalFiles);
+    }
   });
 }
 
-// ===== [3] Procesamiento de Archivos =====
-// Versión mejorada de processFile con manejo robusto de errores
-async function processFile(file) {
-  const resultItem = createResultItem(file.name);
-  resultsDiv.appendChild(resultItem);
-
-  try {
-    // 1. Validar tipo de archivo primero
-    if (!isValidFileType(file)) {
-      throw new Error('Tipo de archivo no soportado');
-    }
-
-    // 2. Verificar si el PDF está corrupto
-    if (file.type === 'application/pdf') {
-      await validatePDF(file);
-    }
-
-    console.log( file.type );
-
-    // 3. Procesamiento real
-    const text = file.type === 'application/pdf' 
-      ? await processPDF(file) 
-      : await processImageWithOCR(file);
-
-    showResult(resultItem, file.name, text);
-
-  } catch (error) {
-    console.error(`Error procesando ${file.name}:`, error);
-    showError(resultItem, file.name, {
-      message: `Error al procesar archivo: ${error.message}`,
-      details: 'El archivo puede estar corrupto o en formato no soportado'
-    });
+function updateProgress(processed, total) {
+  const percent = Math.round((processed / total) * 100);
+  progressBar.style.width = `${percent}%`;
+  progressBar.textContent = `${percent}%`;
+  
+  if (processed === total) {
+    progressBar.classList.add('complete');
   }
 }
 
-// Helpers para mostrar resultados
-function createResultItem(filename) {
-  const item = document.createElement('div');
-  item.className = 'result-item';
-  item.innerHTML = `
-    <h3>${filename}</h3>
-    <div class="progress-bar"><div class="progress"></div></div>
-    <p>Procesando...</p>
-  `;
-  return item;
+// ===== [3] Procesamiento de Archivos =====
+async function processFile(file) {
+  // Validar tipo de archivo
+  if (!isValidFileType(file)) {
+    throw new Error('Tipo de archivo no soportado. Solo PDF, JPG y PNG.');
+  }
+
+  // Procesar según tipo
+  if (file.type === 'application/pdf') {
+    await validatePDF(file); // Validar estructura PDF primero
+    return await extractTextFromPDF(file);
+  } else {
+    return await processImageWithOCR(file);
+  }
 }
 
-function showResult(item, filename, text) {
-  item.innerHTML = `
-    <h3>${filename}</h3>
-    <p>${text.length > 200 ? text.substring(0, 200) + '...' : text}</p>
-    <button class="download-btn" data-text="${encodeURIComponent(text)}" 
-            data-filename="${filename.replace(/\.[^/.]+$/, '')}.txt">
-      Descargar TXT
-    </button>
-  `;
-}
-
-function showError(item, filename, error) {
-  item.innerHTML = `
-    <h3>${filename}</h3>
-    <p class="error">Error: ${error.message}</p>
-  `;
-}
-
-// ===== [4] Funciones de Procesamiento =====
-async function processPDF(file) {
+async function extractTextFromPDF(file) {
   try {
-    // Opción 1: Usar backend (Netlify Function)
+    // Opción 1: Intentar extracción directa con PDF.js
+    const loadingTask = pdfjsLib.getDocument({
+      url: URL.createObjectURL(file),
+      disableStream: true,
+      disableAutoFetch: true
+    });
+    
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+    const maxPages = Math.min(pdf.numPages, 20); // Limitar a 20 páginas
+    
+    for (let i = 1; i <= maxPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(item => item.str).join(' ') + '\n\n';
+      } catch (pageError) {
+        console.warn(`Error en página ${i}:`, pageError);
+        continue;
+      }
+    }
+
+    // Si se extrajo texto suficiente, retornarlo
+    if (fullText.trim().length > 50) {
+      return fullText;
+    }
+
+    // Opción 2: Si no hay texto, intentar con backend OCR
+    console.log('PDF sin texto detectable, intentando con backend OCR...');
     const result = await processWithBackend(file);
     return result.text;
+    
   } catch (error) {
-    console.error("Error al procesar PDF:", error);
-    throw error;
+    console.error('Error en extractTextFromPDF:', error);
+    throw new Error('No se pudo extraer texto del PDF');
   }
 }
 
 async function processImageWithOCR(file) {
   try {
-    // Usar Tesseract.js en el frontend
     const worker = await Tesseract.createWorker();
-    await worker.loadLanguage('spa');
-    await worker.initialize('spa');
+    await worker.loadLanguage('spa+eng');
+    await worker.initialize('spa+eng');
     await worker.setParameters({
       preserve_interword_spaces: '1',
-      tessedit_pageseg_mode: '6'
+      tessedit_pageseg_mode: '6',
+      tessedit_ocr_engine_mode: '1'
     });
 
     const { data } = await worker.recognize(file);
     await worker.terminate();
     
-    return data.text;
+    return data.text || '(No se encontró texto en la imagen)';
   } catch (error) {
-    console.error("Error en OCR:", error);
-    throw new Error("Falló el reconocimiento de texto");
+    console.error('Error en OCR:', error);
+    throw new Error('Falló el reconocimiento de texto en la imagen');
   }
 }
-// Funciones auxiliares
-function isValidFileType(file) {
-  const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-  return validTypes.includes(file.type);
-}
 
-async function validatePDF(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const arr = new Uint8Array(reader.result);
-      // Buscar %PDF en los primeros 1024 bytes
-      const header = Array.from(arr.slice(0, 1024)).map(byte => 
-        String.fromCharCode(byte)).join('');
-      
-      if (header.includes('%PDF')) {
-        resolve();
-      } else {
-        reject(new Error('El archivo no es un PDF válido'));
-      }
-    };
-    reader.onerror = () => reject(new Error('Error al leer el archivo'));
-    reader.readAsArrayBuffer(file.slice(0, 1024)); // Leer primeros 1024 bytes
-  });
-}
-
-// Versión segura de processPDF
-async function processPDF(file) {
-  try {
-    // Opción 1: Intentar con el backend primero
-    try {
-      const result = await processWithBackend(file);
-      return result.text;
-    } catch (backendError) {
-      console.warn('Falló backend, intentando con PDF.js:', backendError);
-    }
-
-    // Opción 2: Fallback a PDF.js
-    const pdf = await pdfjsLib.getDocument({
-      url: URL.createObjectURL(file),
-      disableStream: true,
-      disableAutoFetch: true
-    }).promise;
-
-    let fullText = '';
-    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      fullText += content.items.map(item => item.str).join(' ') + '\n\n';
-    }
-
-    return fullText || '(No se pudo extraer texto del PDF)';
-
-  } catch (error) {
-    throw new Error(`Error procesando PDF: ${error.message}`);
-  }
-}
-// ===== [5] Backend (Netlify Functions) =====
+// ===== [4] Backend (Netlify Functions) =====
 async function processWithBackend(file) {
   try {
     if (file.size > 8 * 1024 * 1024) {
-      throw new Error("El archivo excede el límite de 8MB");
+      throw new Error("El archivo excede el límite de 8MB para procesamiento en backend");
     }
 
     const base64 = await toBase64(file);
@@ -233,32 +194,99 @@ async function processWithBackend(file) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Error ${response.status}: ${errorText}`);
+      throw new Error(`Error del servidor: ${errorText}`);
     }
 
     const data = await response.json();
     
     if (!data?.[0]?.text) {
-      throw new Error("Formato de respuesta inesperado");
+      throw new Error("Formato de respuesta inesperado del servidor");
     }
 
     return data[0];
   } catch (error) {
-    console.error(`Error procesando ${file.name}:`, error);
+    console.error('Error en processWithBackend:', error);
     throw error;
   }
 }
 
-// ===== [6] Utilidades =====
-function toBase64(file) {
-  return new Promise((resolve) => {
+// ===== [5] Helpers =====
+function isValidFileType(file) {
+  const validTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+  return validTypes.includes(file.type);
+}
+
+async function validatePDF(file) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+    reader.onload = () => {
+      const arr = new Uint8Array(reader.result);
+      const header = new TextDecoder().decode(arr.slice(0, 1024));
+      
+      if (header.includes('%PDF')) {
+        resolve();
+      } else {
+        reject(new Error('El archivo no es un PDF válido'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Error al leer el archivo'));
+    reader.readAsArrayBuffer(file.slice(0, 1024));
+  });
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Error al leer el archivo'));
     reader.readAsDataURL(file);
   });
 }
 
-// Descargar archivos TXT
+function createResultItem(filename) {
+  const item = document.createElement('div');
+  item.className = 'result-item';
+  item.innerHTML = `
+    <h3>${filename}</h3>
+    <div class="progress-bar"><div class="progress"></div></div>
+    <p>Procesando...</p>
+  `;
+  return item;
+}
+
+function showResult(item, filename, text) {
+  const shortText = text.length > 300 ? text.substring(0, 300) + '...' : text;
+  item.innerHTML = `
+    <h3>${filename}</h3>
+    <div class="text-preview">${shortText}</div>
+    <div class="actions">
+      <button class="view-btn">Ver completo</button>
+      <button class="download-btn" data-text="${encodeURIComponent(text)}" 
+              data-filename="${filename.replace(/\.[^/.]+$/, '')}.txt">
+        Descargar TXT
+      </button>
+    </div>
+  `;
+
+  // Agregar evento para ver texto completo
+  item.querySelector('.view-btn').addEventListener('click', () => {
+    alert(text);
+  });
+}
+
+function showError(item, filename, error) {
+  if (!item) {
+    item = createResultItem(filename);
+    resultsDiv.appendChild(item);
+  }
+  item.innerHTML = `
+    <h3 class="error-title">${filename}</h3>
+    <p class="error-message">${error.message}</p>
+    ${error.details ? `<p class="error-details">${error.details}</p>` : ''}
+  `;
+}
+
+// ===== [6] Eventos de Descarga =====
 resultsDiv.addEventListener('click', (e) => {
   if (e.target.classList.contains('download-btn')) {
     const text = decodeURIComponent(e.target.getAttribute('data-text'));
@@ -268,11 +296,23 @@ resultsDiv.addEventListener('click', (e) => {
 });
 
 function downloadTxt(text, filename) {
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    const cleanName = filename.replace(/[^a-z0-9áéíóúñü_\-]/gi, '_') + '.txt';
+    const blob = new Blob(["\uFEFF" + text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = cleanName;
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    console.error('Error al descargar:', error);
+    alert('Error al generar el archivo de descarga');
+  }
 }
