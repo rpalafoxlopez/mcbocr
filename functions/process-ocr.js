@@ -64,6 +64,24 @@ exports.handler = async (event) => {
   }
 };
 
+// En tu función de Netlify
+const getSimpleText = (buffer) => {
+  return new Promise((resolve) => {
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+    
+    let text = '';
+    stream.on('data', chunk => {
+      text += chunk.toString('ascii', 0, 1024) // Extracción ASCII cruda
+    });
+    stream.on('end', () => resolve(text));
+  });
+};
+
+// Luego usa:
+text = await getSimpleText(buffer) || await extractWithOCR(buffer);
+
 // Renderizador personalizado para manejar fuentes complejas
 async function renderPage(pageData) {
   const renderOptions = {
