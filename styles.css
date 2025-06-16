@@ -54,7 +54,7 @@ body {
 
 h1 {
   font-size: 2.5rem;
-  color: var(--primary-color);
+  color: var(--light-color);
   margin-bottom: 5px;
 }
 
@@ -242,7 +242,7 @@ h1 {
 }
 
 .results-container {
-  min-height: 200px;
+  min-height: 600px;
   border: 1px dashed #ddd;
   border-radius: var(--border-radius);
   padding: 20px;
