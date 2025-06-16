@@ -189,7 +189,7 @@ function toBase64(file) {
 resultsDiv.addEventListener('click', (e) => {
   if (e.target.classList.contains('download-btn')) {
     const text = decodeURIComponent(e.target.getAttribute('data-text'));
-    const filename = e.target.getAttribute('data-filename'));
+    const filename = e.target.getAttribute('data-filename');
     downloadTxt(text, filename);
   }
 });
