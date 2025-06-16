@@ -163,19 +163,18 @@ async function validatePDF(file) {
     const reader = new FileReader();
     reader.onload = () => {
       const arr = new Uint8Array(reader.result);
-      // Verificar cabecera del PDF
-      if (arr.length > 4 && 
-          arr[0] === 0x25 && // %
-          arr[1] === 0x50 && // P
-          arr[2] === 0x44 && // D
-          arr[3] === 0x46) { // F
+      // Buscar %PDF en los primeros 1024 bytes
+      const header = Array.from(arr.slice(0, 1024)).map(byte => 
+        String.fromCharCode(byte)).join('');
+      
+      if (header.includes('%PDF')) {
         resolve();
       } else {
         reject(new Error('El archivo no es un PDF válido'));
       }
     };
     reader.onerror = () => reject(new Error('Error al leer el archivo'));
-    reader.readAsArrayBuffer(file.slice(0, 4)); // Solo leer los primeros bytes
+    reader.readAsArrayBuffer(file.slice(0, 1024)); // Leer primeros 1024 bytes
   });
 }
 
