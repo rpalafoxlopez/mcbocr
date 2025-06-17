@@ -125,7 +125,7 @@ function handleFiles(files) {
   const totalFiles = files.length;
 
   Array.from(files).forEach(async (file) => {
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > 50 * 1024 * 1024) {
       showError(null, file.name, {
         message: `El archivo supera el límite de 10MB`,
         details: ''
