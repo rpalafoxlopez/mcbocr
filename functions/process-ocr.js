@@ -78,17 +78,18 @@ async function getWorker() {
 }
 
 async function extractTextFromPDF(buffer) {
-  // Timeout para evitar procesamiento infinito
   const timeout = new Promise((_, reject) => 
     setTimeout(() => reject(new Error('Tiempo de procesamiento excedido')), 
     MAX_EXECUTION_TIME
   );
 
   try {
+    let rawText = '';
+
     // 1. Intento con pdf-parse
     const pdfData = await Promise.race([
       pdfParse(buffer, {
-        max: 10, // Reducido a 10 páginas para mejor performance
+        max: 10,
         pagerender: async (pageData) => {
           const textContent = await pageData.getTextContent({
             normalizeWhitespace: true,
@@ -100,26 +101,27 @@ async function extractTextFromPDF(buffer) {
       timeout
     ]);
 
+    // 2. Decidir si usar texto nativo o OCR
     if (pdfData.text && pdfData.text.trim().length > 50) {
-      return pdfData.text;
+      rawText = pdfData.text;
+      console.log('Usando texto nativo del PDF');
+    } else {
+      console.log('Iniciando OCR para PDF...');
+      const worker = await getWorker();
+      const { data } = await Promise.race([
+        worker.recognize(buffer),
+        timeout
+      ]);
+      rawText = data.text;
     }
 
-    // 2. Fallback a OCR si no hay suficiente texto
-    console.log('Iniciando OCR para PDF...');
-    const worker = await getWorker();
-    const { data } = await Promise.race([
-      worker.recognize(buffer),
-      timeout
-    ]);
-
-    // Aplicar post-procesamiento al texto OCR
-    return postProcessOCRText(data.text) || '(No se pudo extraer texto del PDF)';
+    // 3. Aplicar post-procesamiento SIEMPRE
+    return postProcessOCRText(rawText) || '(No se pudo extraer texto del PDF)';
   } catch (error) {
     console.error('Error en extractTextFromPDF:', error);
     throw error;
   }
 }
-
 exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
 
