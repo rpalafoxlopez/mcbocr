@@ -11,6 +11,36 @@ const workerCache = {
   lastUsed: 0
 };
 
+// Función para post-procesar texto OCR
+function postProcessOCRText(text) {
+  if (!text) return '';
+  
+  // 1. Corregir secuencias de letras espaciadas (ej: "F R I A S" => "FRIAS")
+  let processed = text.replace(/([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z]+)/g, 
+    (_, p1, p2, p3, p4) => p1 + p2 + p3 + p4
+  );
+  
+  // 2. Corregir emails con múltiples @
+  processed = processed.replace(/(\S+@\S+)@(\S+\.\S+)/g, '$1.$2');
+  
+  // 3. Corregir patrones comunes OCR
+  const replacements = {
+    'O': '0',
+    'I': '1',
+    'Z': '2',
+    'A': '4',
+    'S': '5',
+    'G': '6',
+    'T': '7',
+    'B': '8'
+  };
+  
+  return processed.replace(
+    /(\b\d[\d\s]+\d\b)/g, 
+    match => match.split(/\s+/).map(char => replacements[char] || char).join('')
+  );
+}
+
 async function getWorker() {
   // Reutilizar worker si está disponible
   if (workerCache.worker && (Date.now() - workerCache.lastUsed < 30000)) {
@@ -23,7 +53,7 @@ async function getWorker() {
     await workerCache.worker.terminate();
   }
 
-  // Crear nuevo worker
+  // Crear nuevo worker con config optimizada para formularios
   const worker = await createWorker({
     logger: m => console.log(m),
     errorHandler: err => console.error(err),
@@ -32,10 +62,14 @@ async function getWorker() {
 
   await worker.loadLanguage('spa+eng');
   await worker.initialize('spa+eng');
+  
+  // Parámetros optimizados para formularios estructurados
   await worker.setParameters({
     preserve_interword_spaces: '1',
-    tessedit_pageseg_mode: '6',
-    tessedit_ocr_engine_mode: '1'
+    tessedit_pageseg_mode: '11',  // PSM_SPARSE_TEXT (mejor para tablas)
+    tessedit_ocr_engine_mode: '1', // Tesseract + LSTM
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@.-/ ',
+    textord_tabfind_show_tables: '1'
   });
 
   workerCache.worker = worker;
@@ -54,7 +88,7 @@ async function extractTextFromPDF(buffer) {
     // 1. Intento con pdf-parse
     const pdfData = await Promise.race([
       pdfParse(buffer, {
-        max: 20, // Limitar a 20 páginas
+        max: 10, // Reducido a 10 páginas para mejor performance
         pagerender: async (pageData) => {
           const textContent = await pageData.getTextContent({
             normalizeWhitespace: true,
@@ -78,7 +112,8 @@ async function extractTextFromPDF(buffer) {
       timeout
     ]);
 
-    return data.text || '(No se pudo extraer texto del PDF)';
+    // Aplicar post-procesamiento al texto OCR
+    return postProcessOCRText(data.text) || '(No se pudo extraer texto del PDF)';
   } catch (error) {
     console.error('Error en extractTextFromPDF:', error);
     throw error;
@@ -86,10 +121,8 @@ async function extractTextFromPDF(buffer) {
 }
 
 exports.handler = async (event, context) => {
-  // Configurar timeout de Netlify
   context.callbackWaitsForEmptyEventLoop = false;
 
-  // Validar método HTTP
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -98,7 +131,6 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Validar cuerpo de la solicitud
     if (!event.body) {
       return {
         statusCode: 400,
@@ -117,21 +149,18 @@ exports.handler = async (event, context) => {
     // Procesar cada archivo
     const results = await Promise.all(files.map(async (file) => {
       try {
-        // Validar tamaño máximo (80MB)
         const buffer = Buffer.from(file.base64, 'base64');
-        if (buffer.length > 80 * 1024 * 1024) {
+        if (buffer.length > 45 * 1024 * 1024) {
           throw new Error('Archivo excede el límite de 8MB');
         }
 
-        // Extraer texto según tipo de archivo
         let text = '';
         if (file.name.toLowerCase().endsWith('.pdf')) {
           text = await extractTextFromPDF(buffer);
         } else {
-          // Procesar imagen con OCR
           const worker = await getWorker();
           const { data } = await worker.recognize(buffer);
-          text = data.text;
+          text = postProcessOCRText(data.text);  // Aplicar post-procesamiento
         }
 
         return {
@@ -166,7 +195,6 @@ exports.handler = async (event, context) => {
       })
     };
   } finally {
-    // Limpiar worker al terminar
     if (workerCache.worker) {
       await workerCache.worker.terminate();
       workerCache.worker = null;
