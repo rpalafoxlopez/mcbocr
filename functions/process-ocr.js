@@ -3,7 +3,7 @@ const pdfParse = require('pdf-parse');
 const { Readable } = require('stream');
 
 // Tiempo máximo de ejecución (5 minutos)
-const MAX_EXECUTION_TIME = 300000;
+const MAX_EXECUTION_TIME = 400000;
 
 // Cache de workers para mejor performance
 const workerCache = {
@@ -117,9 +117,9 @@ exports.handler = async (event, context) => {
     // Procesar cada archivo
     const results = await Promise.all(files.map(async (file) => {
       try {
-        // Validar tamaño máximo (8MB)
+        // Validar tamaño máximo (80MB)
         const buffer = Buffer.from(file.base64, 'base64');
-        if (buffer.length > 8 * 1024 * 1024) {
+        if (buffer.length > 80 * 1024 * 1024) {
           throw new Error('Archivo excede el límite de 8MB');
         }
 
